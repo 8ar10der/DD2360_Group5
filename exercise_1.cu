@@ -1,6 +1,6 @@
 /* run nvcc -arch-sm_50 code.cu -o -helloworld */
 
-#include <studio.h>
+#include <stdio.h>
 #define N 1
 /* number of böpcls */
 #define TPB 256
@@ -8,7 +8,7 @@
 __global__ void printthreadKernel(){
   int threadID = threadIdx.x;
   /* only one block, no need for blockIdx or dim */
-  printf("Hello world! My threadID is %d\n!", threadID);
+  printf("Hello world! My threadID is %d!\n", threadID);
   /*print out hello world and ID nr*/
 }
 
