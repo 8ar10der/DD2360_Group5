@@ -2,6 +2,8 @@
 #include <thrust/device_vector.h>
 
 #include <cstdlib>
+#include <utility>
+
 #include <iostream>
 
 #define NUM_PARTICLES 10000
@@ -15,66 +17,64 @@ struct Particle {
 };
 
 
-__global__ void updateParticlesKernel(thrust::device_vector<Particle> particles) {
+__global__ void updateParticlesKernel(thrust::device_vector<float3>* position, thrust::device_vector<float3>* velocity) {
 	// int threadID = threadIdx.x;
 	const int i = blockIdx.x  *blockDim.x + threadIdx.x;
 
-	// (&particles[i]).get()->velocity.x += 0.1;
-	// (&particles[i]).get()->velocity.y = 0.001;
-	// (&particles[i]).get()->velocity.z -= 0.002; 
-	// (&particles[i]).get()->position.x += (&particles[i]).get()->velocity.x * 1;
+	*velocity[i].x = *velocity[i].x + 0.1;
+	// *velocity[i].y += 0.001;
+	// *velocity[i].z -= 0.002; 
+	// *position[i].x += *velocity[i].x;
 
 
-	static_cast<float> (particles[i].velocity.x) += 0.1;
+	// static_cast<float> (particles[i].velocity.x) += 0.1;
 	// particles[i].velocity.y = 0.001;
 	// particles[i].velocity.z -= 0.002; 
 	// particles[i].position.x += particles[i];
 
 }
 
-__host__ void updateParticles(thrust::host_vector<Particle> particles) {
+__host__ void updateParticles(thrust::host_vector<float3> particles_position, thrust::host_vector<float3> particles_velocity) {
 	
-	for (Particle particle: particles) {
-		particle.velocity.x += 0.1;
-		particle.velocity.y += 0.001;
-		particle.velocity.z -= 0.002; 
-		particle.position.x += particle.velocity.x * 1;
+	for (unsigned int i = 0; i < particles_position.size(); i++) {
+		particles_velocity[i].x += 0.1;
+		particles_velocity[i].y += 0.001;
+		particles_velocity[i].z -= 0.002; 
+		particles_position[i].x += particles_velocity[i].x * 1;
 	}
 
 
 }
 
-__host__ thrust::host_vector<Particle> generate_random_particles(int no_particles) {
-	Particle particle_zero;
-	particle_zero.position = make_float3(0.0, 0.0, 0.0);
-	particle_zero.velocity = make_float3(0.0, 0.0, 0.0);
+__host__ std::pair<thrust::host_vector<float3>, thrust::host_vector<float3>> generate_random_particles(int no_particles) {
+
+	float3 particles_position_zero = make_float3(0.0, 0.0, 0.0);
+	float3 particles_velocity_zero = make_float3(0.0, 0.0, 0.0);
 
 
-	thrust::host_vector<Particle> particles (no_particles, particle_zero);
+	thrust::host_vector<float3> particles_position (no_particles, particles_position_zero);
+	thrust::host_vector<float3> particles_velocity (no_particles, particles_velocity_zero);
+
 	for (unsigned int i = 0; i < no_particles; i++) {
-		particles[i].position = make_float3((float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX);
-		particles[i].velocity = make_float3((float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX);
+		particles_position[i] = make_float3((float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX);
+		particles_velocity[i] = make_float3((float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX, (float) std::rand()/RAND_MAX);
 	}
-	return particles;
+	return std::make_pair(particles_position, particles_velocity);
 }
 
 
 int main(int argc, char** argv){
-	// argv[]
-	thrust::host_vector<Particle> particles = generate_random_particles(100);
-	updateParticles(particles);
+
+	std::pair<thrust::host_vector<float3>, thrust::host_vector<float3>> particles = generate_random_particles(100);
+
+	// updateParticles(particles.first, particles.second);
 
 
-	thrust::device_vector<Particle> *gpu_particle;
-	cudaMalloc(&gpu_particle, particles.size() * sizeof(thrust::device_vector<Particle>));
-	thrust::host_vector<Particle> *cpu_particle = &particles;
+	thrust::device_vector<float3> gpuParticlePosition = particles.first;
+	thrust::device_vector<float3> gpuParticleVelocity = particles.second;
 
-	cudaMemcpy(gpu_particle, cpu_particle, particles.size() * sizeof(thrust::device_vector<Particle>),cudaMemcpyHostToDevice);
-	
-	thrust::device_vector<Particle> particles_gpu = *gpu_particle;
-
-	updateParticlesKernel<<<N/TPB, TPB>>>(particles_gpu);
-  	cudaDeviceSynchronize();
+	updateParticlesKernel<<<N/TPB, TPB>>>(&gpuParticlePosition, &gpuParticleVelocity);
+  	// cudaDeviceSynchronize();
 	return 0;
 }
 
