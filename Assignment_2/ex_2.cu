@@ -4,14 +4,14 @@
 
 
 __global__ void gpu_saxpy(float a, float *x, float *y){
-    int N = 1<<ARRAY_SIZE;
+    int N = ARRAY_SIZE;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N) 
         y[i] = a * x[i] + y[i];
 }
 
 void cpu_saxpy(float a, float *x, float *y){
-    int N = 1<<ARRAY_SIZE;
+    int N = ARRAY_SIZE;
     for (int i = 0; i < N; i++){
         y[i] = a * x[i] + y[i];
     }
@@ -19,7 +19,7 @@ void cpu_saxpy(float a, float *x, float *y){
 
 int main(int argc, char const *argv[])
 {
-    int N = 1<<ARRAY_SIZE;
+    int N = ARRAY_SIZE;
     float *x,*c_y,*g_y;
     float *d_x,*d_y;
     //localhost pointer
@@ -42,21 +42,22 @@ int main(int argc, char const *argv[])
     cpu_saxpy(2.0f,x,c_y);
     printf("Done!\n");
     printf("Computing SAXPY on the GPU…  ");
-    gpu_saxpy<<<(N+255)/256,256>>>(2.0f,d_x,d_y);
+    gpu_saxpy<<<(N+255)/256, 256>>>(2.0f,d_x,d_y);
     printf("Done!\n");
     //copy result
     cudaMemcpy(g_y,d_y,N*sizeof(float),cudaMemcpyDeviceToHost);
     //comparing
-    float errorCount = 0;
+    int errorCount = 0;
     printf("Comparing the output for each implementation…  ");
     for (int i = 0; i < N; i++){
+        // printf("<%f,%f>",c_y[i],g_y[i]);
         if (abs(c_y[i]-g_y[i]) >= 0.5f)
             errorCount++;
     }
     if (errorCount == 0){
-        printf("Correct!");
+        printf("Correct!\n");
     } else {
-        printf("Not Pass, there are %d differences.", errorCount);
+        printf("Not Pass, there are %d differences.\n", errorCount);
     }
     
     //free
@@ -65,6 +66,4 @@ int main(int argc, char const *argv[])
     free(g_y);
     free(c_y);
     free(x);
-
-
 }
