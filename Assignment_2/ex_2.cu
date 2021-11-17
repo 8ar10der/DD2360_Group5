@@ -1,6 +1,7 @@
 #include<stdio.h>
+#include <sys/time.h>
 
-#define ARRAY_SIZE 10000;
+#define ARRAY_SIZE 10000000; //2^n
 
 
 __global__ void gpu_saxpy(float a, float *x, float *y){
@@ -16,6 +17,12 @@ void cpu_saxpy(float a, float *x, float *y){
         y[i] = a * x[i] + y[i];
     }
 } 
+
+double cpuSecond() {
+   struct timeval tp;
+   gettimeofday(&tp,NULL);
+   return ((double)tp.tv_sec + (double)tp.tv_usec*1.e-6);
+}
 
 int main(int argc, char const *argv[])
 {
@@ -39,11 +46,15 @@ int main(int argc, char const *argv[])
     cudaMemcpy(d_y,g_y,N*sizeof(float),cudaMemcpyHostToDevice);
     //saxpy
     printf("Computing SAXPY on the CPU…  ");
+    double CPUTime = cpuSecond();
     cpu_saxpy(2.0f,x,c_y);
-    printf("Done!\n");
+    CPUTime = cpuSecond() - CPUTime;
+    printf("Done! The time of the cpu computing is: %fs\n", CPUTime);
     printf("Computing SAXPY on the GPU…  ");
+    double GPUTime = cpuSecond();
     gpu_saxpy<<<(N+255)/256, 256>>>(2.0f,d_x,d_y);
-    printf("Done!\n");
+    GPUTime = cpuSecond() - GPUTime;
+    printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
     //copy result
     cudaMemcpy(g_y,d_y,N*sizeof(float),cudaMemcpyDeviceToHost);
     //comparing
