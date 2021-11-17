@@ -3,10 +3,10 @@
 #include <assert.h>
 #include <sys/time.h>
 
-#define NUM_PARTICLES 1000000
-#define NUM_ITERATIONS 2000
-#define BLOCKS 256
-#define TBP 1024 
+#define NUM_PARTICLES 10000000
+#define NUM_ITERATIONS 200
+#define BLOCKS 128
+#define TBP 32 
 
 
 typedef struct  {
@@ -18,14 +18,17 @@ typedef struct  {
 __global__ void updateParticlesKernel(Particle* particles) {
 	// int threadID = threadIdx.x;
 	const int i = blockIdx.x  *blockDim.x + threadIdx.x;
+
+
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) {
         for (unsigned j = i; j < NUM_PARTICLES; j += TBP*BLOCKS) {
-            particles[j].velocity.x += 0.1;
+            particles[j].velocity.x +=  0.1;
             particles[j].velocity.y += 0.001;
             particles[j].velocity.z -= 0.002; 
             particles[j].position.x += particles[j].velocity.x * 1;
         }
     }
+
 
 }
 
@@ -47,9 +50,10 @@ __host__ void checkConsistency(Particle* particlesHost, Particle* particlesDevic
 }
 
 __host__ void updateParticles(Particle* particles, unsigned numberOfParticles) {
+
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) {
         for (unsigned i = 0; i < numberOfParticles; i++) {
-            particles[i].velocity.x += 0.1;
+            particles[i].velocity.x +=  0.1;
             particles[i].velocity.y += 0.001;
             particles[i].velocity.z -= 0.002; 
             particles[i].position.x += particles[i].velocity.x * 1;
@@ -85,27 +89,27 @@ int main(int argc, char const *argv[])
     particles = (Particle*)malloc(particlesSize);
     cudaMalloc(&cudaParticles, particlesSize);
 
+    Particle* cudaParticlesOnHost;
+    cudaParticlesOnHost = (Particle*)malloc(particlesSize);
+
     generateRandomParticles(particles, NUM_PARTICLES);
 
+
+    double updateParticlesKernelStart = cpuSecond();
     cudaMemcpy(cudaParticles, particles, particlesSize, cudaMemcpyHostToDevice);
+    // <blocks, threads per block> 
+    updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles);
+    cudaDeviceSynchronize();
+    cudaMemcpy(cudaParticlesOnHost, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
+    double updateParticlesKernelTime = cpuSecond() - updateParticlesKernelStart;
+
 
     double updateParticlesStart = cpuSecond();
     updateParticles(particles, NUM_PARTICLES);
     double updateParticlesTime = cpuSecond() - updateParticlesStart;
 
-    double updateParticlesKernelStart = cpuSecond();
-    // <blocks, threads per block> 
-    updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles);
-    cudaDeviceSynchronize();
-    double updateParticlesKernelTime = cpuSecond() - updateParticlesKernelStart;
-
     printf("updateParticlesTime: %f updateParticlesKernelTime: %f \n", updateParticlesTime, updateParticlesKernelTime);
 
-
-    Particle* cudaParticlesOnHost;
-    cudaParticlesOnHost = (Particle*)malloc(particlesSize);
-
-    cudaMemcpy(cudaParticlesOnHost, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
 
     checkConsistency(particles, cudaParticlesOnHost, NUM_PARTICLES);
 
