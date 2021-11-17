@@ -1,7 +1,7 @@
 #include<stdio.h>
 #include <sys/time.h>
 
-#define ARRAY_SIZE 10000000; //2^n
+#define ARRAY_SIZE 10000000;
 
 
 __global__ void gpu_saxpy(float a, float *x, float *y){
