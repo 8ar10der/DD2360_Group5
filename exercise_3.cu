@@ -21,7 +21,9 @@ __global__ void updateParticlesKernel(thrust::device_vector<float3>* position, t
 	// int threadID = threadIdx.x;
 	const int i = blockIdx.x  *blockDim.x + threadIdx.x;
 
-	*velocity[i].x = *velocity[i].x + 0.1;
+
+	float3 a = make_float3(0.0f, 0.0f, 0.0f);
+	float3* b = velocity[i];
 	// *velocity[i].y += 0.001;
 	// *velocity[i].z -= 0.002; 
 	// *position[i].x += *velocity[i].x;
@@ -37,7 +39,7 @@ __global__ void updateParticlesKernel(thrust::device_vector<float3>* position, t
 __host__ void updateParticles(thrust::host_vector<float3> particles_position, thrust::host_vector<float3> particles_velocity) {
 	
 	for (unsigned int i = 0; i < particles_position.size(); i++) {
-		particles_velocity[i].x += 0.1;
+		particles_velocity[i].x += 0.1;1.0f;
 		particles_velocity[i].y += 0.001;
 		particles_velocity[i].z -= 0.002; 
 		particles_position[i].x += particles_velocity[i].x * 1;
@@ -68,7 +70,6 @@ int main(int argc, char** argv){
 	std::pair<thrust::host_vector<float3>, thrust::host_vector<float3>> particles = generate_random_particles(100);
 
 	// updateParticles(particles.first, particles.second);
-
 
 	thrust::device_vector<float3> gpuParticlePosition = particles.first;
 	thrust::device_vector<float3> gpuParticleVelocity = particles.second;

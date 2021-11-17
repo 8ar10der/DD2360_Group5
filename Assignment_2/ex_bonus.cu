@@ -4,11 +4,11 @@
 
 /* define threads and blocks */
 #define N 32//blocks = N/TPB
-#define TPB 512 //threads
-#define TRIALS_PER_THREAD 100 //trials per thread
+#define TPB 1024 //threads
+#define TRIALS_PER_THREAD 1000000 //trials per thread
 
 //randomized cointoss
-__global__ void cointoss(curandState *states, unsigned int* coinTot, unsigned int* inCirc) {
+__global__ void cointoss(curandState *states, unsigned long int* coinTot, unsigned long int* inCirc) {
   //setup thread seed
   int id = threadIdx.x + blockDim.x * blockIdx.x;
   int seed = id; //different seed per thread
@@ -36,14 +36,14 @@ __global__ void cointoss(curandState *states, unsigned int* coinTot, unsigned in
 
 
 int main(){
-  unsigned* coinTot; //number of times coin is in circle
-  unsigned* inCirc; //number of times coin is in circle
+  unsigned long int* coinTot; //number of times coin is in circle
+  unsigned long int* inCirc; //number of times coin is in circle
   
-  cudaMalloc(&coinTot, sizeof(unsigned));
-  cudaMalloc(&inCirc, sizeof(unsigned));
+  cudaMalloc(&coinTot, sizeof(unsigned long int));
+  cudaMalloc(&inCirc, sizeof(unsigned long int));
 
-  cudaMemset(coinTot, 0, sizeof(unsigned));
-  cudaMemset(inCirc, 0, sizeof(unsigned));
+  cudaMemset(coinTot, 0, sizeof(unsigned long int));
+  cudaMemset(inCirc, 0, sizeof(unsigned long int));
 
 
   curandState *dev_random;
