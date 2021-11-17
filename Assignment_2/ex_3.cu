@@ -3,10 +3,7 @@
 #include <assert.h>
 #include <sys/time.h>
 
-#define NUM_PARTICLES 10000000
 #define NUM_ITERATIONS 200
-#define BLOCKS 128
-#define TBP 32 
 
 
 typedef struct  {
@@ -15,13 +12,13 @@ typedef struct  {
 } Particle;
 
 
-__global__ void updateParticlesKernel(Particle* particles) {
+__global__ void updateParticlesKernel(Particle* particles, unsigned totalThreads, unsigned totalParticles) {
 	// int threadID = threadIdx.x;
 	const int i = blockIdx.x  *blockDim.x + threadIdx.x;
 
 
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) {
-        for (unsigned j = i; j < NUM_PARTICLES; j += TBP*BLOCKS) {
+        for (unsigned j = i; j < totalParticles; j += totalThreads) {
             particles[j].velocity.x +=  0.1;
             particles[j].velocity.y += 0.001;
             particles[j].velocity.z -= 0.002; 
@@ -82,10 +79,16 @@ int main(int argc, char const *argv[])
     Particle* particles;
     Particle* cudaParticles;
 
+    // Number of Particles
+    unsigned NUM_PARTICLES = atoi(argv[1]);
+
+    // Number of threads per block
+    unsigned TBP = atoi(argv[2]);
+
+    printf("NUM_PARTICLES: %d TBP: %d \n", NUM_PARTICLES, TBP);
 
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
-    //localhost pointer
     particles = (Particle*)malloc(particlesSize);
     cudaMalloc(&cudaParticles, particlesSize);
 
@@ -98,7 +101,8 @@ int main(int argc, char const *argv[])
     double updateParticlesKernelStart = cpuSecond();
     cudaMemcpy(cudaParticles, particles, particlesSize, cudaMemcpyHostToDevice);
     // <blocks, threads per block> 
-    updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles);
+    unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
+    updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles, TBP*BLOCKS, NUM_PARTICLES);
     cudaDeviceSynchronize();
     cudaMemcpy(cudaParticlesOnHost, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
     double updateParticlesKernelTime = cpuSecond() - updateParticlesKernelStart;
