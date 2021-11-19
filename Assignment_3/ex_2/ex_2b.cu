@@ -80,7 +80,7 @@ int main(int argc, char const *argv[])
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
     particles = (Particle*)malloc(particlesSize);
-    cudaMalloc(&cudaParticles, particlesSize);
+    cudaMallocManaged(&cudaParticles, particlesSize);
 
     generateRandomParticles(particles, NUM_PARTICLES);
 

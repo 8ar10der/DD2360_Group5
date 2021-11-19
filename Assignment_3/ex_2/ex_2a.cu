@@ -80,7 +80,12 @@ int main(int argc, char const *argv[])
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
     particles = (Particle*)malloc(particlesSize);
-    cudaMalloc(&cudaParticles, particlesSize);
+    cudaError_t pinnedMemory = cudaHostAlloc(&cudaParticles, particlesSize, cudaHostAllocDefault);
+
+    if (pinnedMemory != cudaSuccess) {
+        printf("pinnedMemory Allocation resulted in error  %d", pinnedMemory);
+    }
+
 
     generateRandomParticles(particles, NUM_PARTICLES);
 
@@ -93,6 +98,6 @@ int main(int argc, char const *argv[])
     }
 
     free(particles);
-    cudaFree(cudaParticles);
+    cudaFreeHost(cudaParticles);
 }
  
