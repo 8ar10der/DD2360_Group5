@@ -80,16 +80,19 @@ int main(int argc, char const *argv[])
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
     particles = (Particle*)malloc(particlesSize);
-    cudaMallocManaged(&cudaParticles, particlesSize);
+    cudaError_t managedMemory = cudaMallocManaged(&cudaParticles, particlesSize);
+
+    if (managedMemory != cudaSuccess) {
+        printf("managedMemory Allocation resulted in error  %d", managedMemory);
+    }
 
     generateRandomParticles(particles, NUM_PARTICLES);
 
+
     unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) { 
-        cudaMemcpy(cudaParticles, particles, particlesSize, cudaMemcpyHostToDevice);
         updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles, TBP*BLOCKS, NUM_PARTICLES);
         cudaDeviceSynchronize();
-        cudaMemcpy(particles, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
     }
 
     free(particles);

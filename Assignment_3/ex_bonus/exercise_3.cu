@@ -55,6 +55,7 @@ void compare_matrix(float *matrix_a, float *matrix_b, long size, double threshol
 	}
 }
 
+
 /* init matrix with curand */
 void init_matrix(float *matrix, long size, unsigned long long seed)
 {
@@ -132,7 +133,11 @@ void shared_sgemm_kernel(float *C, float *A, float *B, long size)
 	const long row = blockIdx.y * blockDim.y + threadIdx.y;
 	float val = 0.0;
 
+
 	/* TODO declare shared memory with size TILE_SIZE x TILE_SIZE */
+	// done
+	__shared__ float tile_A[TILE_SIZE][TILE_SIZE];
+	__shared__ float tile_B[TILE_SIZE][TILE_SIZE];
 
 	if (col < size && row < size) {
 		const long local_col = blockIdx.x * TILE_SIZE + threadIdx.x;
@@ -142,10 +147,20 @@ void shared_sgemm_kernel(float *C, float *A, float *B, long size)
 			tile_A[threadIdx.y][threadIdx.x] = A[local_row * size + (m * TILE_SIZE + threadIdx.x)];
 			tile_B[threadIdx.y][threadIdx.x] = B[(m * TILE_SIZE + threadIdx.y) * size + local_col];
 			__syncthreads();
-	
+
 			/* TODO introduce a pragma directive that can potentially improve performance here */
+			/* 
+			I am not 100% sure but reading https://www.ibm.com/docs/en/zos/2.2.0?topic=performance-using-pragmas
+
+			only #pragma unroll seems relevant, but it is does not signifcant impact the performance...,
+			it could be with the -O3 option this is already being done, one could always output the assembly code to double check
+			
+			*/
+			#pragma unroll
 			for (long k = 0; k < TILE_SIZE; ++k) {
 				/* TODO Perform multiplication here */
+				// done
+				val += tile_A[threadIdx.y][k] * tile_B[k][threadIdx.x];
 			}
 			__syncthreads();
 		}
@@ -160,6 +175,7 @@ void shared_sgemm(float *C, float *A, float *B, long size)
 	struct timeval t0, t1;
 	gettimeofday(&t0, NULL);
 	shared_sgemm_kernel<<<grid, block>>>(C, A, B, size);
+	cudaDeviceSynchronize();
 	checkCudaErrors(cudaPeekAtLastError());
 	checkCudaErrors(cudaDeviceSynchronize());
 	gettimeofday(&t1, NULL);
@@ -179,7 +195,16 @@ void cublas_sgemm(float *C, float *A, float *B, long size)
 
 	gettimeofday(&t0, NULL);
 	/* TODO fill in the blanks, do C = BA instead of C = AB */
-	cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, , , , , , , , , , , );
+	// Done
+	cublasSgemm(
+				handle, CUBLAS_OP_N, CUBLAS_OP_N,
+				size, size, size,
+				&alpha,
+				B, size,
+				A, size,
+				&beta,
+				C, size
+				);
 	checkCudaErrors(cudaDeviceSynchronize());
 	gettimeofday(&t1, NULL);
 	cublasDestroy(handle);

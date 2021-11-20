@@ -62,5 +62,22 @@ NUM_PARTICLES: 1000000 TBP: 32
 2. Modified Program nvprof output
 
 
+# Exercise 3
 
-    
+# Exercise Bonus
+
+
+```
+lucasap@red-14:/afs/kth.se/home/l/u/lucasap/repos/DD2360_Group5/Assignment_3/ex_bonus$ ./exercise_3.out ./exercise_3.out -s 1024 -v
+Matrix size: 1024x1024
+Matrix size: 1024x1024
+Grid size: 64x64
+Tile size: 16x16
+Run CPU sgemm: 1
+
+CPU matmul:			158.873000 ms
+GPU cuBLAS matmul:		3.689000 ms
+GPU matmul (global memory):	219.479000 ms
+GPU matmul (shared memory):	22.277000 ms
+
+```
