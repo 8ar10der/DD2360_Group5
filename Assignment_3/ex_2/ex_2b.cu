@@ -67,7 +67,7 @@ __host__ void generateRandomParticles(Particle* particles, unsigned numberOfPart
 int main(int argc, char const *argv[])
 {
     Particle* particles;
-    Particle* cudaParticles;
+    // Particle* cudaParticles;
 
     // Number of Particles
     unsigned NUM_PARTICLES = atoi(argv[1]);
@@ -79,8 +79,8 @@ int main(int argc, char const *argv[])
 
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
-    particles = (Particle*)malloc(particlesSize);
-    cudaError_t managedMemory = cudaMallocManaged(&cudaParticles, particlesSize);
+    // particles = (Particle*)malloc(particlesSize);
+    cudaError_t managedMemory = cudaMallocManaged(&particles, particlesSize);
 
     if (managedMemory != cudaSuccess) {
         printf("managedMemory Allocation resulted in error  %d", managedMemory);
@@ -91,11 +91,12 @@ int main(int argc, char const *argv[])
 
     unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) { 
-        updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles, TBP*BLOCKS, NUM_PARTICLES);
+        updateParticlesKernel<<<BLOCKS, TBP>>>(particles, TBP*BLOCKS, NUM_PARTICLES);
         cudaDeviceSynchronize();
     }
 
-    free(particles);
-    cudaFree(cudaParticles);
+    cudaFree(particles);
+
+    // cudaFree(cudaParticles);
 }
  
