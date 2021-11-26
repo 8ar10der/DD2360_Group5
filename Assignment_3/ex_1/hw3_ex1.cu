@@ -278,7 +278,6 @@ void cpu_gaussian(int width, int height, float *image, float *image_out)
  */
 __global__ void gpu_gaussian(int width, int height, float *image, float *image_out)
 {
-  __shared__ float sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
 
     float gaussian[9] = { 1.0f / 16.0f, 2.0f / 16.0f, 1.0f / 16.0f,
                           2.0f / 16.0f, 4.0f / 16.0f, 2.0f / 16.0f,
@@ -286,10 +285,6 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
 
     int index_x = blockIdx.x * blockDim.x + threadIdx.x;
     int index_y = blockIdx.y * blockDim.y + threadIdx.y;
-
-    sh_block[threadIdx.x] = sh_block[index_x];
-
-    __synctreads();
 
     if (index_x < (width - 2) && index_y < (height - 2))
     {
@@ -335,7 +330,6 @@ void cpu_sobel(int width, int height, float *image, float *image_out)
  */
 __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
 {
-    __shared__ float sh_block[BLOCK_SIE_SH * BLOCK_SIZE_SH];
 
   int w = blockIdx.x * blockDim.x + threadIdx.x;
   int h = blockIdx.y * blockDim.y + threadIdx.y;
