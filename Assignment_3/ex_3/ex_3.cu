@@ -3,8 +3,6 @@
 #include <assert.h>
 #include <sys/time.h>
 
-#define NUM_ITERATIONS 200
-
 
 typedef struct  {
     float3 position;
@@ -33,12 +31,10 @@ __host__ void generateRandomParticles(Particle* particles, unsigned numberOfPart
 
 int main(int argc, char const *argv[])
 {
-    printf("1");
     Particle* particles;
 
     cudaStream_t stream1;
     cudaStreamCreate(&stream1);
-    printf("1");
 
     // Number of Particles
     unsigned NUM_PARTICLES = atoi(argv[1]);
@@ -58,8 +54,6 @@ int main(int argc, char const *argv[])
     Particle* batches[size];
     Particle* cudaParticlesBatch[size];
 
-    printf("1");
-
     particles = (Particle*)malloc(particlesSize);
     cudaError_t pinnedMemory = cudaHostAlloc(cudaParticlesBatch, size*sizeof(Particle), cudaHostAllocDefault);
 
@@ -74,8 +68,6 @@ int main(int argc, char const *argv[])
         batches[i] = particles + i * batchSize;
     }
 
-    printf("1");
-
     unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
     for (unsigned k = 0; k < size; k++) {
         cudaMemcpyAsync(cudaParticlesBatch[k], batches[k], batchSize, cudaMemcpyHostToDevice, stream1);
@@ -83,8 +75,6 @@ int main(int argc, char const *argv[])
         cudaStreamSynchronize(stream1);
         cudaMemcpyAsync(batches[k], cudaParticlesBatch[k], batchSize, cudaMemcpyDeviceToHost, stream1);
     }
-
-    printf("1");
 
     free(particles);
     cudaFreeHost(cudaParticlesBatch);
