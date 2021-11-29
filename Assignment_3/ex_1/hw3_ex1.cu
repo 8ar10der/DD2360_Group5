@@ -278,7 +278,7 @@ void cpu_gaussian(int width, int height, float *image, float *image_out)
  */
 __global__ void gpu_gaussian(int width, int height, float *image, float *image_out)
 {
-//  __shared__ float* sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
+  __shared__ float sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
 
     float gaussian[9] = { 1.0f / 16.0f, 2.0f / 16.0f, 1.0f / 16.0f,
                           2.0f / 16.0f, 4.0f / 16.0f, 2.0f / 16.0f,
@@ -286,22 +286,53 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
 
     int index_x = blockIdx.x * blockDim.x + threadIdx.x;
     int index_y = blockIdx.y * blockDim.y + threadIdx.y;
+    int idx = (threadIdx.x + 1) + (BLOCK_SIZE_SH * (threadIdx.y+1));
 
-    int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    for (int i = 0; i < BLOCK_SIZE_SH; i++){
+      int offset_stop = index_x  + (index_y * index_x - 1);
+      int offset_sbot = index_x  + (index_y * index_x + 1);
+      sh_block[i] = image[offset_stop];
+      sh_block[i + BLOCK_SIZE_SH*(BLOCK_SIZE_SH-1)] = image[offset_sbot];
+    }
 
     if (index_x < (width - 2) && index_y < (height - 2))
     {
         int offset_t = index_y * width + index_x;
-        //offset of image + stride
         int offset   = (index_y + 1) * width + (index_x + 1);
+        // int offset_shared = (index_y - 1) * width + (index_x - 1);
+        //offset of image + stride
+
         //offset of image
-//        sh_block[threadIdx.x][threadIdx.y] = image[offset_t];
-//        __syncthreads();
+        sh_block[idx] = image[offset_t];
+
+        // if (offset_shared >= 0 && width * height> offset_shared)
+        // {
+        //   //top row
+        //   sh_block[threadIdx.x] = image[offset_shared + threadIdx.x];
+        //   for (int i = BLOCK_SIZE; i < BLOCK_SIZE_SH; i++){
+        //     sh_block[i] = image[offset_shared + i];
+        //   }
+        //
+        //   //bottom row
+        //   int bottom_idx = (BLOCK_SIZE_SH * (BLOCK_SIZE_SH-1)) + threadIdx.x;
+        //   sh_block[bottom_idx] = image[bottom_idx];
+        //
+        //   for (int i = bottom_idx + BLOCK_SIZE; i < BLOCK_SIZE_SH * BLOCK_SIZE_SH; i++){
+        //     sh_block[i] = image[bottom_idx + i];
+        //   }
+        //
+        // }
+
         //put one pixel in sh_block in coordinates
-        image_out[offset] = gpu_applyFilter(&image[offset_t],
-                                            width, gaussian, 3);
-        // image_out[offset] = gpu_applyFilter(&sh_block[threadIdx.x][threadIdx.y],
-                                            // width, gaussian, 3);
+        // image_out[offset] = gpu_applyFilter(&image[offset_t],
+        //  width, gaussian, 3);
+
+        __syncthreads();
+        // printf("%d %d ");
+
+         image_out[offset] = gpu_applyFilter(&sh_block[idx]
+                                            , BLOCK_SIZE_SH, gaussian, 3);
+
 
     }
 }
@@ -341,9 +372,12 @@ void cpu_sobel(int width, int height, float *image, float *image_out)
 __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
 {
 //    __shared__ float sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
+  __shared__ float sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
 
   int w = blockIdx.x * blockDim.x + threadIdx.x;
   int h = blockIdx.y * blockDim.y + threadIdx.y;
+
+  int idx = (threadIdx.x + 1) + (BLOCK_SIZE_SH * (threadIdx.y+1));
 
   float sobel_x[9] = { 1.0f,  0.0f, -1.0f,
                        2.0f,  0.0f, -2.0f,
@@ -356,11 +390,15 @@ __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
     int offset_t = h * width + w;
     int offset = (h + 1) * width + (w + 1);
 
+    sh_block[idx] = image[offset_t];
+    __syncthreads();
+
+
   //  sh_block[w + h*width] = image[offset_t];
   //  __syncthreads();
 
-    float gx = gpu_applyFilter(&image[offset_t], width, sobel_x, 3);
-    float gy = gpu_applyFilter(&image[offset_t], width, sobel_y, 3);
+    float gx = gpu_applyFilter(&sh_block[idx], BLOCK_SIZE_SH, sobel_x, 3);
+    float gy = gpu_applyFilter(&sh_block[idx], BLOCK_SIZE_SH, sobel_y, 3);
 
     image_out[offset] = sqrtf(gx * gx + gy * gy);
 
