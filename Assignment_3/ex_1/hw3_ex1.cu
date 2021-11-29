@@ -293,9 +293,9 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
     if (threadIdx.x == 0 || threadIdx.x == BLOCK_SIZE-1 || threadIdx.y == 0 || threadIdx.y == BLOCK_SIZE-1) {
 
       // start padding 3x3 around border blocks
-      for (int i = -1; i < 2; i++) {
+      for (int i = 0; i < 3; i++) {
         //row 3
-        for (int j = -1; j < 2; j++)  {
+        for (int j = 0; j < 3; j++)  {
           // pad_y = i;
           // pad_x = j;
           int padIdx_x = blockIdx.x * blockDim.x + threadIdx.x + j;
@@ -315,8 +315,6 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
           // location on shared block based on padding index (relative)
 
           sh_block[offset_sh] = image[offset_pad];
-          __syncthreads();
-
         }
       }
 
@@ -397,9 +395,9 @@ __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
     if (threadIdx.x == 0 || threadIdx.x == BLOCK_SIZE-1 || threadIdx.y == 0 || threadIdx.y == BLOCK_SIZE-1) {
 
       // start padding 3x3 around border blocks
-      for (int i = -1; i < 2; i++) {
+      for (int i = 0; i < 3; i++) {
         //row 3
-        for (int j = -1; j < 2; j++)  {
+        for (int j = 0; j < 3; j++)  {
           // pad_y = i;
           // pad_x = j;
           int padIdx_x = blockIdx.x * blockDim.x + threadIdx.x + j;
