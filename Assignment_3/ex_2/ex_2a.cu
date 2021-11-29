@@ -66,7 +66,7 @@ __host__ void generateRandomParticles(Particle* particles, unsigned numberOfPart
 
 int main(int argc, char const *argv[])
 {
-    Particle* particles;
+    Particle* pinnedParticles;
     Particle* cudaParticles;
 
     // Number of Particles
@@ -79,25 +79,35 @@ int main(int argc, char const *argv[])
 
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
 
-    particles = (Particle*)malloc(particlesSize);
-    cudaError_t pinnedMemory = cudaHostAlloc(&cudaParticles, particlesSize, cudaHostAllocDefault);
+
+    cudaMalloc(&cudaParticles, particlesSize);
+    cudaError_t pinnedMemory = cudaHostAlloc(&pinnedParticles, particlesSize, cudaHostAllocDefault);
 
     if (pinnedMemory != cudaSuccess) {
         printf("pinnedMemory Allocation resulted in error  %d", pinnedMemory);
     }
 
-
-    generateRandomParticles(particles, NUM_PARTICLES);
+    generateRandomParticles(pinnedParticles, NUM_PARTICLES);
 
     unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) { 
-        cudaMemcpy(cudaParticles, particles, particlesSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(cudaParticles, pinnedParticles, particlesSize, cudaMemcpyHostToDevice);
         updateParticlesKernel<<<BLOCKS, TBP>>>(cudaParticles, TBP*BLOCKS, NUM_PARTICLES);
         cudaDeviceSynchronize();
-        cudaMemcpy(particles, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
+        cudaMemcpy(pinnedParticles, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
     }
 
-    free(particles);
-    cudaFreeHost(cudaParticles);
+
+    // Particle* cudaParticlesOnHost;
+
+    // cudaParticlesOnHost = (Particle*)malloc(particlesSize);
+    // cudaMemcpy(cudaParticlesOnHost, cudaParticles, particlesSize, cudaMemcpyDeviceToHost);
+    // checkConsistency(particles, cudaParticlesOnHost, NUM_PARTICLES);
+
+    // free(particles);
+    // free(cudaParticlesOnHost);
+    cudaFree(cudaParticles);
+    cudaFree(pinnedParticles);
+
 }
  
