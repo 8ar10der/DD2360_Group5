@@ -278,6 +278,7 @@ void cpu_gaussian(int width, int height, float *image, float *image_out)
  */
 __global__ void gpu_gaussian(int width, int height, float *image, float *image_out)
 {
+//  __shared__ float* sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
 
     float gaussian[9] = { 1.0f / 16.0f, 2.0f / 16.0f, 1.0f / 16.0f,
                           2.0f / 16.0f, 4.0f / 16.0f, 2.0f / 16.0f,
@@ -286,13 +287,22 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
     int index_x = blockIdx.x * blockDim.x + threadIdx.x;
     int index_y = blockIdx.y * blockDim.y + threadIdx.y;
 
+    int idx = threadIdx.y * blockDim.x + threadIdx.x;
+
     if (index_x < (width - 2) && index_y < (height - 2))
     {
         int offset_t = index_y * width + index_x;
+        //offset of image + stride
         int offset   = (index_y + 1) * width + (index_x + 1);
-
+        //offset of image
+//        sh_block[threadIdx.x][threadIdx.y] = image[offset_t];
+//        __syncthreads();
+        //put one pixel in sh_block in coordinates
         image_out[offset] = gpu_applyFilter(&image[offset_t],
                                             width, gaussian, 3);
+        // image_out[offset] = gpu_applyFilter(&sh_block[threadIdx.x][threadIdx.y],
+                                            // width, gaussian, 3);
+
     }
 }
 
@@ -330,6 +340,7 @@ void cpu_sobel(int width, int height, float *image, float *image_out)
  */
 __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
 {
+//    __shared__ float sh_block[BLOCK_SIZE_SH * BLOCK_SIZE_SH];
 
   int w = blockIdx.x * blockDim.x + threadIdx.x;
   int h = blockIdx.y * blockDim.y + threadIdx.y;
@@ -345,10 +356,13 @@ __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
     int offset_t = h * width + w;
     int offset = (h + 1) * width + (w + 1);
 
-    float gx = gpu_applyFilter(&image[offset_t + w], width, sobel_x, 3);
-    float gy = gpu_applyFilter(&image[offset_t + w], width, sobel_y, 3);
+  //  sh_block[w + h*width] = image[offset_t];
+  //  __syncthreads();
 
-    image_out[offset + (w + 1)] = sqrtf(gx * gx + gy * gy);
+    float gx = gpu_applyFilter(&image[offset_t], width, sobel_x, 3);
+    float gy = gpu_applyFilter(&image[offset_t], width, sobel_y, 3);
+
+    image_out[offset] = sqrtf(gx * gx + gy * gy);
 
   }
 
