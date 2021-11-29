@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <assert.h>
 
+#define NUM_ITERATIONS 200
 
 typedef struct  {
     float3 position;
@@ -25,6 +26,10 @@ __host__ void checkConsistency(Particle* particlesHost, Particle* particlesDevic
     for (unsigned i = 0; i < numberOfParticles; i++) {
         printf("host: %f, device: %f\n", particlesHost[i].position.x, particlesDevice[i].position.x);
         printf("host: %f, device: %f\n", particlesHost[i].position.y, particlesDevice[i].position.y);
+        printf("host: %f, device: %f\n", particlesHost[i].position.z, particlesDevice[i].position.z);
+        printf("host: %f, device: %f\n", particlesHost[i].velocity.x, particlesDevice[i].velocity.x);
+        printf("host: %f, device: %f\n", particlesHost[i].velocity.y, particlesDevice[i].velocity.y);
+        printf("host: %f, device: %f\n", particlesHost[i].velocity.z, particlesDevice[i].velocity.z);
 
         assert (particlesHost[i].position.x == particlesDevice[i].position.x);
         assert (particlesHost[i].position.y == particlesDevice[i].position.y);
@@ -54,65 +59,69 @@ __host__ void generateRandomParticles(Particle* particles, unsigned numberOfPart
 
 int main(int argc, char const *argv[])
 {
-    Particle* particles;
-
-    cudaStream_t stream1;
-    cudaStreamCreate(&stream1);
-
     // Number of Particles
-    unsigned NUM_PARTICLES = 100;//atoi(argv[1]);
+    unsigned NUM_PARTICLES = atoi(argv[1]);
 
     // Number of threads per block
-    unsigned TBP = 10;//atoi(argv[2]);
+    unsigned TBP = atoi(argv[2]);
 
-    //The length of one batches
-    unsigned BATCH_LENGTH = 10;//atoi(argv[3]);
+    //The size of one batches
+    unsigned BATCH_LENGTH = atoi(argv[3]);
 
     unsigned BLOCKS = (NUM_PARTICLES + TBP - 1)/TBP;
+    //The number of Streams
+    unsigned STREAM_NUM = atoi(argv[4]);
 
-    printf("NUM_PARTICLES: %d TBP: %d BL: %d \n", NUM_PARTICLES, TBP, BATCH_LENGTH);
+    cudaStream_t streams[STREAM_NUM];
+    for(int i =0;i<STREAM_NUM;i++){
+        cudaStreamCreate(&streams[i]);
+    }
+    
+    printf("NUM_PARTICLES: %d TBP: %d BL: %d SN: %d \n", NUM_PARTICLES, TBP, BATCH_LENGTH, STREAM_NUM);
 
     size_t particlesSize = NUM_PARTICLES*sizeof(Particle);
     size_t batchSize = BATCH_LENGTH*sizeof(Particle);
-
-    int size = (NUM_PARTICLES+BATCH_LENGTH-1)/BATCH_LENGTH;
+    size_t size = (NUM_PARTICLES+BATCH_LENGTH-1)/BATCH_LENGTH;
+    
     Particle* batches[size];
     Particle* cudaParticles;
-
-    particles = (Particle*)malloc(particlesSize);
-    cudaError_t pinnedMemory = cudaHostAlloc((void**) &cudaParticles, particlesSize, cudaHostAllocDefault);
+    Particle* pinnnedParticles;
+    
+    cudaMalloc(&cudaParticles, particlesSize);
+    cudaError_t pinnedMemory = cudaHostAlloc((void**) &pinnnedParticles, particlesSize, cudaHostAllocDefault);
 
     if (pinnedMemory != cudaSuccess) {
         printf("pinnedMemory Allocation resulted in error  %d", pinnedMemory);
     }
 
-    generateRandomParticles(particles, NUM_PARTICLES);
-//    for (int i = 0; i < 100; i++){
-//        printf("%f\n",(particles+i)->position.x);
-//    }
+    generateRandomParticles(pinnnedParticles, NUM_PARTICLES);
 
     //divide particles into batches
     for (int i = 0; i < size; i++){
-        batches[i] = particles + i * BATCH_LENGTH;
-//        printf("%f\n",(particles + i * BATCH_LENGTH)->position.x);
+        batches[i] = pinnnedParticles + i * BATCH_LENGTH;
     }
 
-    for (unsigned k = 0; k < size; k++) {
+    for(int i=0;i < NUM_ITERATIONS;i++){
+        for (unsigned k = 0; k < size; k++) {
+            Particle* selectedBatch = batches[k];
+            int s_index = k % STREAM_NUM;
 
-        Particle* selectedBatch = batches[k];
-//        for (int j = 0; j < BATCH_LENGTH; j++){
-//            printf("%f\n", selectedBatch[j].position.x);
-//        }
-        cudaMemcpyAsync(&cudaParticles[k*BATCH_LENGTH], selectedBatch, batchSize, cudaMemcpyHostToDevice, stream1);
-        updateParticlesKernel<<<BLOCKS, TBP, 0, stream1>>>(&cudaParticles[k*BATCH_LENGTH], TBP*BLOCKS, BATCH_LENGTH);
-        cudaStreamSynchronize(stream1);
-        cudaMemcpyAsync(selectedBatch, &cudaParticles[k*BATCH_LENGTH], batchSize, cudaMemcpyDeviceToHost, stream1);
+            cudaMemcpyAsync(&cudaParticles[k*BATCH_LENGTH], selectedBatch, batchSize, cudaMemcpyHostToDevice, streams[s_index]);
+            updateParticlesKernel<<<BLOCKS, TBP, 0, streams[s_index]>>>(&cudaParticles[k*BATCH_LENGTH], TBP*BLOCKS, BATCH_LENGTH);
+        }
     }
+    cudaMemcpyAsync(pinnnedParticles, cudaParticles, particlesSize, cudaMemcpyDeviceToHost, streams[0]);
 
-//    updateParticles(particles,particlesSize);
-//    checkConsistency(particles,cudaParticles,particlesSize);
+    for (int i = 0; i < STREAM_NUM; i++)
+    {
+        cudaStreamSynchronize(streams[i]);
+    }
+    
+    //checkConsistency(pinnnedParticles,cudaParticles,NUM_PARTICLES);
 
-    free(particles);
-    cudaFreeHost(cudaParticles);
-    cudaStreamDestroy(stream1);
+    cudaFree(cudaParticles);
+    cudaFreeHost(pinnnedParticles);
+    for(int i =0;i<STREAM_NUM;i++){
+        cudaStreamDestroy(streams[i]);
+    }
 }

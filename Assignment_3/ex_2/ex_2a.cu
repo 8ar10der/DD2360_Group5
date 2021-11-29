@@ -107,7 +107,6 @@ int main(int argc, char const *argv[])
     // free(particles);
     // free(cudaParticlesOnHost);
     cudaFree(cudaParticles);
-    cudaFree(pinnedParticles);
-
+    cudaFreeHost(pinnedParticles);
 }
  
