@@ -287,40 +287,49 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
     int index_x = blockIdx.x * blockDim.x + threadIdx.x;
     int index_y = blockIdx.y * blockDim.y + threadIdx.y;
     int idx = (threadIdx.x + 1) + (BLOCK_SIZE_SH * (threadIdx.y+1));
+    int offset_t = index_y * width + index_x;
 
-    for (int i = 0; i < BLOCK_SIZE_SH; i++){
-      int offset_stop = index_x  + (index_y * index_x - 1);
-      int offset_sbot = index_x  + (index_y * index_x + 1);
-      sh_block[i] = image[offset_stop];
-      sh_block[i + BLOCK_SIZE_SH*(BLOCK_SIZE_SH-1)] = image[offset_sbot];
+    // only boundary threads will pad
+    if (threadIdx.x == 0 || threadIdx.x == BLOCK_SIZE-1 || threadIdx.y == 0 || threadIdx.y == BLOCK_SIZE-1) {
+
+      // start padding 3x3 around border blocks
+      for (int i = -1; i < 2; i++) {
+        //row 3
+        for (int j = -1; j < 2; j++)  {
+          // pad_y = i;
+          // pad_x = j;
+          int padIdx_x = blockIdx.x * blockDim.x + threadIdx.x + j;
+          //location x border of block in whole image (absolute)
+          int padIdx_y = blockIdx.y * blockDim.y + threadIdx.y + i;
+          //location y border of block in whole image (absolute)
+          int offset_pad = padIdx_y*width + padIdx_x;
+          // Padding index of 3x3 block around given pixel based on whole image
+
+          //prevent overflow of image at all end points
+          if (padIdx_x == -1 || padIdx_x == width+1 || padIdx_y == -1 ||padIdx_y == height+1) {
+            break;
+          }
+
+
+          int offset_sh = (threadIdx.x + 1 + j) + ((threadIdx.y + 1 + i)*BLOCK_SIZE_SH);
+          // location on shared block based on padding index (relative)
+
+          sh_block[offset_sh] = image[offset_pad];
+          __syncthreads();
+
+        }
+      }
+
     }
 
     if (index_x < (width - 2) && index_y < (height - 2))
     {
-        int offset_t = index_y * width + index_x;
         int offset   = (index_y + 1) * width + (index_x + 1);
         // int offset_shared = (index_y - 1) * width + (index_x - 1);
-        //offset of image + stride
 
         //offset of image
         sh_block[idx] = image[offset_t];
 
-        // if (offset_shared >= 0 && width * height> offset_shared)
-        // {
-        //   //top row
-        //   sh_block[threadIdx.x] = image[offset_shared + threadIdx.x];
-        //   for (int i = BLOCK_SIZE; i < BLOCK_SIZE_SH; i++){
-        //     sh_block[i] = image[offset_shared + i];
-        //   }
-        //
-        //   //bottom row
-        //   int bottom_idx = (BLOCK_SIZE_SH * (BLOCK_SIZE_SH-1)) + threadIdx.x;
-        //   sh_block[bottom_idx] = image[bottom_idx];
-        //
-        //   for (int i = bottom_idx + BLOCK_SIZE; i < BLOCK_SIZE_SH * BLOCK_SIZE_SH; i++){
-        //     sh_block[i] = image[bottom_idx + i];
-        //   }
-        //
         // }
 
         //put one pixel in sh_block in coordinates
@@ -328,10 +337,8 @@ __global__ void gpu_gaussian(int width, int height, float *image, float *image_o
         //  width, gaussian, 3);
 
         __syncthreads();
-        // printf("%d %d ");
 
-         image_out[offset] = gpu_applyFilter(&sh_block[idx]
-                                            , BLOCK_SIZE_SH, gaussian, 3);
+         image_out[offset] = gpu_applyFilter(&sh_block[idx], BLOCK_SIZE_SH, gaussian, 3);
 
 
     }
@@ -376,7 +383,7 @@ __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
 
   int w = blockIdx.x * blockDim.x + threadIdx.x;
   int h = blockIdx.y * blockDim.y + threadIdx.y;
-
+  int offset_t = h * width + w;
   int idx = (threadIdx.x + 1) + (BLOCK_SIZE_SH * (threadIdx.y+1));
 
   float sobel_x[9] = { 1.0f,  0.0f, -1.0f,
@@ -386,8 +393,40 @@ __global__ void gpu_sobel(int width, int height, float *image, float *image_out)
                        0.0f,  0.0f,  0.0f,
                       -1.0f, -2.0f, -1.0f };
 
+    // only boundary threads will pad
+    if (threadIdx.x == 0 || threadIdx.x == BLOCK_SIZE-1 || threadIdx.y == 0 || threadIdx.y == BLOCK_SIZE-1) {
+
+      // start padding 3x3 around border blocks
+      for (int i = -1; i < 2; i++) {
+        //row 3
+        for (int j = -1; j < 2; j++)  {
+          // pad_y = i;
+          // pad_x = j;
+          int padIdx_x = blockIdx.x * blockDim.x + threadIdx.x + j;
+          //location x border of block in whole image (absolute)
+          int padIdx_y = blockIdx.y * blockDim.y + threadIdx.y + i;
+          //location y border of block in whole image (absolute)
+
+          //prevent overflow of image at all end points
+          if (padIdx_x == -1 || padIdx_x == width+1 || padIdx_y == -1 ||padIdx_y == height+1) {
+            break;
+          }
+
+          int offset_pad = padIdx_y*width + padIdx_x;
+          // Padding index of 3x3 block around given pixel based on whole image (absolute)
+
+          int offset_sh = (threadIdx.x + 1 + j) + ((threadIdx.y + 1 + i)*BLOCK_SIZE_SH);
+          // location on shared block based on padding index (relative)
+
+          sh_block[offset_sh] = image[offset_pad];
+          __syncthreads();
+
+        }
+      }
+
+    }
+
   if (h < (height - 2) && w < (width - 2)) {
-    int offset_t = h * width + w;
     int offset = (h + 1) * width + (w + 1);
 
     sh_block[idx] = image[offset_t];
