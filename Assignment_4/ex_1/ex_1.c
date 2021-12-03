@@ -17,12 +17,8 @@ const char *mykernel = "__kernel \n"
                         "void helloWorld() \n"
                         " { int idxX = get_group_id(0) * get_local_size(0) + get_local_id(0);   \n" 
                         "   int idxY = get_group_id(1) * get_local_size(0) + get_local_id(1);   \n"
-                        "printf(\"Hello World! My threadId is (%d, %d)\\n\", idxX, idxY);}    \n";
-
-                        // "printf(\"Hello World! My threadId is %d\\n\", idxX);}    \n";
-
-
-
+                        "   int idxZ = get_group_id(2) * get_local_size(2) + get_local_id(2);   \n"
+                        "printf(\"Hello World! My threadId is (%d, %d, %d)\\n\", idxX, idxY, idxZ);}    \n";
 
 
 int main(int argc, char *argv) {
@@ -62,11 +58,11 @@ NULL);CHK_ERROR(err);
   
   cl_kernel kernel = clCreateKernel(program, "helloWorld", &err);
 
-  size_t n_workitem[] = {16, 16};
-  size_t workgroup_size[] = {4, 4};
+  size_t n_workitem[] = {4, 4, 4};
+  size_t workgroup_size[] = {2, 2, 2};
 
   // kernel launch
-  err = clEnqueueNDRangeKernel(cmd_queue, kernel, 2, NULL, n_workitem, workgroup_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(cmd_queue, kernel, 3, NULL, n_workitem, workgroup_size, 0, NULL, NULL);
 
   // wait for finish
   err = clFlush(cmd_queue);
