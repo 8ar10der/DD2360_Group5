@@ -13,10 +13,10 @@ const char* clGetErrorString(int);
 
 
 //TODO: Write your kernel here
-const char *mykernel = "__kernel" 
+const char *mykernel = "__kernel \n" 
                         "void helloWorld() \n"
                         " { int index = get_global_id(0);   \n" 
-                        "printf(\"Hello World! My threadId is %d\", index);}    \n";
+                        "printf(\"Hello World! My threadId is %d\\n\", index);}    \n";
 
 
 
@@ -56,7 +56,7 @@ NULL);CHK_ERROR(err);
   clGetProgramBuildInfo(program, device_list[0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
   fprintf(stderr,"Build error: %s\n", buffer); return 0; }
   
-  cl_kernel kernel = clCreateKernel(program, "vadd", &err);
+  cl_kernel kernel = clCreateKernel(program, "helloWorld", &err);
 
   size_t n_workitem = VSIZE;
   size_t workgroup_size = 64;
