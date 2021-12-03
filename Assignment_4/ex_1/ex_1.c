@@ -15,8 +15,12 @@ const char* clGetErrorString(int);
 //TODO: Write your kernel here
 const char *mykernel = "__kernel \n" 
                         "void helloWorld() \n"
-                        " { int index = get_global_id(0);   \n" 
-                        "printf(\"Hello World! My threadId is %d\\n\", index);}    \n";
+                        " { int idxX = get_global_id(0);   \n" 
+                        "   int idxY = get_global_id(1);   \n"
+                        "printf(\"Hello World! My threadId is (%d, %d)\\n\", idxX, idxY);}    \n";
+
+                        // "printf(\"Hello World! My threadId is %d\\n\", idxX);}    \n";
+
 
 
 
@@ -58,11 +62,11 @@ NULL);CHK_ERROR(err);
   
   cl_kernel kernel = clCreateKernel(program, "helloWorld", &err);
 
-  size_t n_workitem = VSIZE;
-  size_t workgroup_size = 64;
+  size_t n_workitem[] = {16, 16};
+  size_t workgroup_size[] = {1, 1};
 
   // kernel launch
-  err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem, &workgroup_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(cmd_queue, kernel, 2, NULL, n_workitem, workgroup_size, 0, NULL, NULL);
 
   // wait for finish
   err = clFlush(cmd_queue);
