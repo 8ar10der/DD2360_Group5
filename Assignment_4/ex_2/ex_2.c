@@ -10,7 +10,7 @@ n",clGetErrorString(err));
 
 #define VSIZE 256
 #define WRKGRP 64
-#define ARRAY_SIZE 1000
+#define ARRAY_SIZE 10000
 
 // A errorCode to string converter (forward declaration)
 const char* clGetErrorString(int);
@@ -20,6 +20,14 @@ void cpu_saxpy(float a, float *x, float *y){
     for (int i = 0; i < N; i++){
         y[i] = a * x[i] + y[i];
     }
+}
+// need more threads than arrays
+int thread_adj(int array, int vsize) {
+  int thread = vsize;
+  while (thread < array) {
+    thread += vsize;
+  }
+  return thread;
 }
 
 double cpuSecond() {
@@ -31,13 +39,13 @@ double cpuSecond() {
 //TODO: Write your kernel here
 const char *gpu_saxpy_program =
 "__kernel                             \n"
-"void gpu_saxpy(__global float *a,   \n"
-"                __global float *x,   \n"
+"void gpu_saxpy( __global float *x,              \n"
 "                __global float *y,   \n"
-"                __global int *N){    \n"
+"                 float a,   \n"
+"                int N){              \n"
 "    int index = get_global_id(0);    \n"
-"    if (index < *N)  {                  \n"
-"      y[index] = (*a) * x[index] + y[index];}}  \n";
+"    if (index < N)  {                  \n"
+"      y[index] = a * x[index] + y[index];}}  \n";
 
 
 
@@ -50,10 +58,10 @@ int main(int argc, char *argv) {
   // Find and sort devices
   cl_device_id *device_list; cl_uint n_devices;
   err = clGetDeviceIDs( platforms[0], CL_DEVICE_TYPE_GPU, 0,NULL,
-&n_devices);CHK_ERROR(err);
+    &n_devices);CHK_ERROR(err);
   device_list = (cl_device_id *) malloc(sizeof(cl_device_id)*n_devices);
   err = clGetDeviceIDs( platforms[0],CL_DEVICE_TYPE_GPU, n_devices, device_list,
-NULL);CHK_ERROR(err);
+    NULL);CHK_ERROR(err);
 
   // Create and initialize an OpenCL context
   cl_context context = clCreateContext( NULL, n_devices, device_list, NULL, NULL,
@@ -65,28 +73,30 @@ NULL);CHK_ERROR(err);
 
   /* Insert your own code here */
   int N = ARRAY_SIZE;
-  float *x, *c_y, *g_y;
+  float *x, *c_y;
   float *d_x, *d_y;
+  float a = 2.0f;
   // allocate host memory
   x = (float*)malloc(N*sizeof(float));
   c_y = (float*)malloc(N*sizeof(float));
-  g_y = (float*)malloc(N*sizeof(float));
+  d_x = (float*)malloc(N*sizeof(float));
+  d_y = (float*)malloc(N*sizeof(float));
 
-  size_t array_size = N*sizeof(float);
+
+  int array_size = N*sizeof(float);
 
   // fill array
   for (int i = 0; i < N; i++){
     x[i] = 1.0f;
+    d_x[i] = 1.0f;
+    d_y[i] = 1.0f;
     c_y[i] = 1.0f;
-    g_y[i] = 1.0f;
   }
 
   //cpu SAXPY
   printf("Computing SAXPY on the CPU... \n");
 
   double CPUTime = cpuSecond();
-
-  float a = 2.0f;
   cpu_saxpy(a, x, c_y);
   CPUTime = cpuSecond()-CPUTime;
   printf("Done! The time of the cpu computing is: %fs\n", CPUTime);
@@ -113,76 +123,79 @@ NULL);CHK_ERROR(err);
   // invoke the kernel (clEnqueueNDRangeKernel)
   // Wait for all commands in the queue to finish (clFinish)
 
-    // kernel
+  //  kernel
     cl_program program = clCreateProgramWithSource(context, 1, (const char **)
                                                   &gpu_saxpy_program, NULL, &err);
-    CHK_ERROR(err);
-
     err = clBuildProgram(program, 1, device_list, NULL, NULL, NULL);
-    // CHK_ERROR(err);
+    CHK_ERROR(err);
 
     if (err != CL_SUCCESS)
     { size_t len;
     char buffer[2048];
     clGetProgramBuildInfo(program, device_list[0], CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
     fprintf(stderr,"Build error: %s\n", buffer); return 0; }
-  //   //create kernel object
+    // create kernel object
 
     cl_kernel kernel = clCreateKernel(program, "gpu_saxpy", &err);
     CHK_ERROR(err);
 
-    //set arguments for kernel
-    // err = clSetKernelArg(kernel, 0, sizeof(cl_mem),(void*)&x_dev);
-    // CHK_ERROR(err);
-    //
-    // err = clSetKernelArg(kernel, 1, sizeof(cl_mem),(void*)&y_dev);
-    // CHK_ERROR(err);
-    //
-    //
-    // size_t n_workitem = VSIZE;
-    // size_t workgroup_size = WRKGRP;
-  //
-  //   // kernel launch
-  //
-  //   //gpu SAXPY
-  //   printf("Computing SAXPY on the GPU... \n");
-  //   double GPUTime = cpuSecond();
-  //   err = clEnqueueNDRangeKernel(cmd_queue, kernel, 3, NULL, n_workitem,
-  //                                 workgroup_size, 0, NULL, NULL);
-  //   err = clEnqueueReadBuffer(cmd_queue, y_dev, CL_TRUE, 0,
-  //                             N*sizeof(float), d_y, 0, NULL, NULL);
-  //
-  //   // wait for finish
-  //   err = clFlush(cmd_queue);
-  //   err = clFinish(cmd_queue);
-  //   GPUTime = cpuSecond() - GPUTime;
-  //   printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
-  //
-  //
-  //   //comparing
-  //   int errorCount = 0;
-  //   printf("Comparing the output for each implementation…  ");
-  //   for (int i = 0; i < N; i++){
-  //       // printf("<%f,%f>",c_y[i],g_y[i]);
-  //       if (abs(c_y[i]-g_y[i]) >= 0.5f)
-  //           errorCount++;
-  //   }
-  //   if (errorCount == 0){
-  //       printf("Correct!\n");
-  //   } else {
-  //       printf("Failure, there are %d differences.\n", errorCount);
-  //   }
-  //
-  // // Finally, release all that we have allocated.
-  // err = clReleaseCommandQueue(cmd_queue);CHK_ERROR(err);
-  // err = clReleaseContext(context);CHK_ERROR(err);
-  // cl_int  clReleaseMemObject (cl_mem x_dev);
-  // cl_int  clReleaseMemObject (cl_mem y_dev);
-  // free(platforms);
-  // free(device_list);
-  // free(g_y);
-  // free(c_y);
-  // free(x);
+    // set arguments for kernel
+
+    err = clSetKernelArg(kernel, 0, sizeof(cl_mem),(void*)&x_dev);
+    CHK_ERROR(err);
+    err = clSetKernelArg(kernel, 1, sizeof(cl_mem),(void*)&y_dev);
+    CHK_ERROR(err);
+    err = clSetKernelArg(kernel, 2, sizeof(a),(void*)&a);
+    CHK_ERROR(err);
+    err = clSetKernelArg(kernel, 3, sizeof(N),(void*)&N);
+    CHK_ERROR(err);
+
+    size_t n_workitem = thread_adj(array_size, VSIZE);
+    size_t workgroup_size = WRKGRP;
+
+    // kernel launch
+
+    //gpu SAXPY
+    printf("Computing SAXPY on the GPU... \n");
+    double GPUTime = cpuSecond();
+    err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem,
+                                  &workgroup_size, 0, NULL, NULL);
+    err = clEnqueueReadBuffer(cmd_queue, y_dev, CL_TRUE, 0,
+                              array_size, d_y, 0, NULL, NULL);
+
+    // wait for finish
+    err = clFlush(cmd_queue);
+    err = clFinish(cmd_queue);
+    GPUTime = cpuSecond() - GPUTime;
+    printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
+
+
+    //comparing
+    int errorCount = 0;
+    printf("Comparing the output for each implementation…  ");
+    for (int i = 0; i < N; i++){
+        // printf("<%f,%f>",c_y[i],d_y[i]);
+        if (abs(c_y[i]-d_y[i]) >= 0.5f)
+            errorCount++;
+    }
+    if (errorCount == 0){
+        printf("Correct!\n");
+    } else {
+        printf("Failure, there are %d differences.\n", errorCount);
+    }
+
+  // Finally, release all that we have allocated.
+  err = clReleaseCommandQueue(cmd_queue);CHK_ERROR(err);
+  err = clReleaseContext(context);CHK_ERROR(err);
+  cl_int  clReleaseMemObject (cl_mem x_dev);
+  cl_int  clReleaseMemObject (cl_mem y_dev);
+  free(platforms);
+  free(device_list);
+  free(c_y);
+  free(x);
+  free(d_y);
+  free(d_x);
+
 
   return 0;
 }
