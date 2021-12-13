@@ -3,11 +3,13 @@
 #include <sys/time.h>
 
 void acc_saxpy(int n, float a, float *x, float *y) {
-    // #pragma acc data
+    #pragma acc data copyin(x[0:n]) copyout(y[0:n])
+    {
         #pragma acc parallel loop 
         for (int i = 0; i < n; ++i) {
             y[i] = a * x[i] + y[i];
         }
+    }
 }
 
 void cpu_saxpy(int n, float a, float *x, float *y){
