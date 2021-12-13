@@ -24,27 +24,32 @@ typedef struct {
 }
 Particle;
 
+
 //TODO: Write your kernel here
-const char * mykernel = "__kernel \n"
-                        "void updateParticlesKernel(Particle* gpuParticles, unsigned* totalThreads, unsigned* totalParticles) { \n"
-                        " { int idx = get_group_id(0);   \n" 
-                        " for (unsigned k = 0; k < *NUM_ITERATIONS; k++) \n" 
-                        "    {  \n" 
-                        "        for (unsigned j = idx; j < *totalParticles; j += totalThreads)  \n" 
-                        "        {  \n" 
-                        "            particles[j].velocity.x += 0.1;  \n" 
-                        "           particles[j].velocity.y += 0.001;  \n" 
-                        "            particles[j].velocity.z -= 0.002;  \n" 
-                        "            particles[j].position.x += particles[j].velocity.x * 1;  \n" 
-                        "        }  \n" 
+const char * mykernel = "typedef struct { \n"
+                        "   float3 position; \n"
+                        "   float3 velocity; \n"
+                        "} \n"
+                        "Particle;\n"
+                        "__kernel void updateParticlesKernel(__global Particle* gpuParticles, int NUM_PARTICLES) \n"
+                        " { int idx = get_group_id(0) * get_local_size(0) + get_local_id(0);  \n" 
+                        " if (idx < NUM_PARTICLES) {"
+                        "   for (unsigned k = 0; k < 200; k++) \n" 
+                        "       {  \n" 
+                        "            gpuParticles[idx].velocity.x += 0.1;  \n" 
+                        "            gpuParticles[idx].velocity.y += 0.001;  \n" 
+                        "            gpuParticles[idx].velocity.z -= 0.002;  \n" 
+                        "            gpuParticles[idx].position.x += gpuParticles[idx].velocity.x * 1;  \n" 
+                        "       } \n"
+                        "   } \n"
                         " } \n";
 
 
 void checkConsistency(Particle* particlesHost, Particle* particlesDevice, unsigned numberOfParticles){
     for (unsigned i = 0; i < numberOfParticles; i++) {
         #if defined DEBUG
-        printf("host: %f, device: %f\n", particlesHost[i].position.x, particlesDevice[i].position.x);
-        printf("host: %f, device: %f\n", particlesHost[i].position.y, particlesDevice[i].position.y);
+        printf("idx: %d, host: %f, device: %f\n", i, particlesHost[i].position.x, particlesDevice[i].position.x);
+        printf("idx: %d, host: %f, device: %f\n", i, particlesHost[i].position.y, particlesDevice[i].position.y);
         #endif
 
         assert(particlesHost[i].position.x == particlesDevice[i].position.x);
@@ -57,7 +62,7 @@ void checkConsistency(Particle* particlesHost, Particle* particlesDevice, unsign
     }
 }
 
-void updateParticles(Particle * particles, unsigned numberOfParticles) {
+void updateParticles(Particle* particles, unsigned numberOfParticles) {
 
     for (unsigned k = 0; k < NUM_ITERATIONS; k++) {
         for (unsigned i = 0; i < numberOfParticles; i++) {
@@ -78,12 +83,13 @@ double cpuSecond() {
 
 void generateRandomParticles(Particle * particles, unsigned numberOfParticles) {
     for (unsigned i = 0; i < numberOfParticles; i++) {
-        particles[i].position = (cl_float3) {
-            (float) rand() / RAND_MAX, (float) rand() / RAND_MAX, (float) rand() / RAND_MAX
-        };
-        particles[i].velocity = (cl_float3) {
-            (float) rand() / RAND_MAX, (float) rand() / RAND_MAX, (float) rand() / RAND_MAX
-        };
+        particles[i].position.x = (float) rand() / RAND_MAX;
+        particles[i].position.y = (float) rand() / RAND_MAX;
+        particles[i].position.z = (float) rand() / RAND_MAX;
+        particles[i].velocity.x = (float) rand() / RAND_MAX;
+        particles[i].velocity.y = (float) rand() / RAND_MAX;
+        particles[i].velocity.z = (float) rand() / RAND_MAX;
+
     }
 }
 
@@ -115,8 +121,7 @@ int main(int argc, char * argv) {
         err);
     CHK_ERROR(err);
 
-    Particle * particles;
-    Particle * gpuParticles;
+    
     unsigned NUM_PARTICLES, TBP;
     printf("count: %d \n", argc);
     // if (argc == 1) {
@@ -136,24 +141,23 @@ int main(int argc, char * argv) {
 
     size_t particlesSize = NUM_PARTICLES * sizeof(Particle);
 
-    particles = (Particle * ) malloc(particlesSize);
+    Particle * particles = (Particle * ) malloc(particlesSize);
     generateRandomParticles(particles, NUM_PARTICLES);
 
 
-    gpuParticles = (Particle * ) malloc(particlesSize);
+    Particle * gpuParticles = (Particle * ) malloc(particlesSize);
 
 
     memcpy(gpuParticles, particles, particlesSize);
 
-    unsigned BLOCKS = (NUM_PARTICLES + TBP - 1) / TBP;
+    int BLOCKS = (NUM_PARTICLES + TBP - 1) / TBP;
+    int divisor = NUM_PARTICLES/TBP;
+    int totalNoThreads = TBP * divisor + TBP;//TBP * BLOCKS;
+    printf("blocks: %d totalnothread: %d divisor: %d\n", BLOCKS, totalNoThreads, divisor);
+    size_t n_workitem = totalNoThreads;
+    size_t workgroup_size = BLOCKS;
 
-    unsigned* totalNoThreads = TBP * BLOCKS;
-    unsigned* NUM_PARTICLES_ptr = NUM_PARTICLES;
-
-    size_t n_workitem[] = {TBP};
-    size_t workgroup_size[] = {BLOCKS};
-
-    cl_mem gpuParticles_dev = clCreateBuffer(context, CL_MEM_READ_WRITE, particlesSize, NULL, & err);
+    cl_mem gpuParticles_dev = clCreateBuffer(context, CL_MEM_READ_WRITE, particlesSize, NULL, &err);
     CHK_ERROR(err);
 
 
@@ -161,7 +165,7 @@ int main(int argc, char * argv) {
     CHK_ERROR(err);
     
 
-    cl_program program = clCreateProgramWithSource(context, 1, (const char ** ) & mykernel, NULL, & err);
+    cl_program program = clCreateProgramWithSource(context, 1, (const char ** ) &mykernel, NULL, & err);
     err = clBuildProgram(program, 1, device_list, NULL, NULL, NULL);
     if (err != CL_SUCCESS) {
         size_t len;
@@ -174,19 +178,26 @@ int main(int argc, char * argv) {
     cl_kernel kernel = clCreateKernel(program, "updateParticlesKernel", & err);
 
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *) &gpuParticles_dev);
-    err = clSetKernelArg(kernel, 1, sizeof(unsigned), (void *) totalNoThreads);
-    err = clSetKernelArg(kernel, 2, sizeof(unsigned), (void *) NUM_PARTICLES_ptr);
+    CHK_ERROR(err);
+    // err = clSetKernelArg(kernel, 1, sizeof(totalNoThreads), (void *) &totalNoThreads);
+    // CHK_ERROR(err);
+    err = clSetKernelArg(kernel, 1, sizeof(NUM_PARTICLES), (void *) &NUM_PARTICLES);
+    CHK_ERROR(err);
 
 
     double updateParticlesKernelStart = cpuSecond();
 
     // kernel launch
-    err = clEnqueueNDRangeKernel(cmd_queue, kernel, 3, NULL, n_workitem, workgroup_size, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem, &workgroup_size, 0, NULL, NULL);
+    CHK_ERROR(err);
+    err = clEnqueueReadBuffer(cmd_queue, gpuParticles_dev, CL_TRUE, 0, particlesSize, gpuParticles, 0, NULL, NULL);
 
 
     // wait for finish
     err = clFlush(cmd_queue);
+    CHK_ERROR(err);
     err = clFinish(cmd_queue);
+    CHK_ERROR(err);
 
     double updateParticlesKernelTime = cpuSecond() - updateParticlesKernelStart;
 
@@ -201,12 +212,13 @@ int main(int argc, char * argv) {
     double updateParticlesTime = cpuSecond() - updateParticlesStart;
 
     printf("updateParticlesTime: %f updateParticlesKernelTime: %f \n", updateParticlesTime, updateParticlesKernelTime);
-
+    
     checkConsistency(particles, gpuParticles, NUM_PARTICLES);
 
     free(platforms);
     free(device_list);
     free(particles);
+    free(gpuParticles);
     clReleaseMemObject(gpuParticles_dev);
 
     return 0;
