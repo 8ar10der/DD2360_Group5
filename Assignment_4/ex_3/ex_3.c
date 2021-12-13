@@ -2,12 +2,12 @@
 #include<stdlib.h>
 #include <sys/time.h>
 
-void acc_saxpy(int n, float a, float *x, float *y) {
-    #pragma acc data copyin(x[0:n]) copyout(y[0:n])
+void acc_saxpy(int n, float a, float *x, float *y, float *z) {
+    #pragma acc data copyin(x[0:n]) copyin(y[0:n]) copyout(z[0:n])
     {
         #pragma acc parallel loop 
         for (int i = 0; i < n; ++i) {
-            y[i] = a * x[i] + y[i];
+            z[i] = a * x[i] + y[i];
         }
     }
 }
@@ -27,11 +27,12 @@ double cpuSecond() {
 int main(int argc, char const *argv[])
 {   
     int N = atoi(argv[1]);
-    float *x,*c_y,*g_y;
+    float *x,*c_y,*g_y,*g_z;
     //localhost pointer
     x = (float*)malloc(N*sizeof(float));
     c_y = (float*)malloc(N*sizeof(float));
     g_y = (float*)malloc(N*sizeof(float));
+    g_z = (float*)malloc(N*sizeof(float));
     //init array
     for (int i = 0; i < N; i++){
         x[i] = 1.0f;
@@ -49,7 +50,7 @@ int main(int argc, char const *argv[])
     printf("Done! The time of the cpu computing is: %fs\n", CPUTime);
     printf("Computing SAXPY on the GPU…  ");
     double GPUTime = cpuSecond();
-    acc_saxpy(N,a,x,g_y);
+    acc_saxpy(N,a,x,g_y,g_z);
     GPUTime = cpuSecond() - GPUTime;
     printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
     //comparing
@@ -57,7 +58,7 @@ int main(int argc, char const *argv[])
     printf("Comparing the output for each implementation…  ");
     for (int i = 0; i < N; i++){
         // printf("<%f,%f>",c_y[i],g_y[i]);
-        if (abs(c_y[i]-g_y[i]) >= 0.5f)
+        if (abs(c_y[i]-g_z[i]) >= 0.5f)
             errorCount++;
     }
     if (errorCount == 0){
