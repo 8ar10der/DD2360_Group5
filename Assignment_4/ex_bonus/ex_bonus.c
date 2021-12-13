@@ -7,8 +7,10 @@
 #include <sys/time.h>
 
 #define NUM_ITERATIONS 200
-
-
+#define min(a,b) \
+({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a < _b ? _a : _b; })
 // This is a macro for checking the error variable.
 
 #define CHK_ERROR(err) if (err != CL_SUCCESS) fprintf(stderr, "Error: %s\
@@ -93,7 +95,7 @@ void generateRandomParticles(Particle * particles, unsigned numberOfParticles) {
     }
 }
 
-int main(int argc, char * argv) {
+int main(int argc, char * argv[]) {
     cl_platform_id * platforms;
     cl_uint n_platform;
     // Find OpenCL Platforms
@@ -122,21 +124,20 @@ int main(int argc, char * argv) {
     CHK_ERROR(err);
 
     
-    unsigned NUM_PARTICLES, TBP;
-    printf("count: %d \n", argc);
-    // if (argc == 1) {
+    int NUM_PARTICLES, TBP;
+    // printf("count: %d \n", argc);
+    if (argc == 1) {
+        NUM_PARTICLES = 1000000;
+        TBP = 32;
+    } 
+    else {
+        printf("hi");
+        // Number of Particles
+        NUM_PARTICLES = atoi(argv[1]);
+        // Number of threads per block
+        TBP = atoi(argv[2]);
+    }
 
-    // } 
-    // else {
-    //     // Number of Particles
-    //     NUM_PARTICLES = atoi(argv[1]);
-
-    //     // Number of threads per block
-    //     TBP = atoi(argv[2]);
-    // }
-
-    NUM_PARTICLES = 1000;
-    TBP = 32;
     printf("NUM_PARTICLES: %d TBP: %d \n", NUM_PARTICLES, TBP);
 
     size_t particlesSize = NUM_PARTICLES * sizeof(Particle);
@@ -148,22 +149,23 @@ int main(int argc, char * argv) {
     Particle * gpuParticles = (Particle * ) malloc(particlesSize);
 
 
-    memcpy(gpuParticles, particles, particlesSize);
-
-    int BLOCKS = (NUM_PARTICLES + TBP - 1) / TBP;
     int divisor = NUM_PARTICLES/TBP;
-    int totalNoThreads = TBP * divisor + TBP;//TBP * BLOCKS;
-    printf("blocks: %d totalnothread: %d divisor: %d\n", BLOCKS, totalNoThreads, divisor);
+    int totalNoThreads = TBP * divisor + TBP;
     size_t n_workitem = totalNoThreads;
-    size_t workgroup_size = BLOCKS;
+    size_t workgroup_size = totalNoThreads/TBP;
+
+    // printf("CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", CL_DEVICE_MAX_WORK_GROUP_SIZE);
+    printf("n_workitem: %ld ; workgroup_size: %ld ;\n", n_workitem, workgroup_size);
 
     cl_mem gpuParticles_dev = clCreateBuffer(context, CL_MEM_READ_WRITE, particlesSize, NULL, &err);
     CHK_ERROR(err);
 
+    double updateParticlesKernelStart = cpuSecond();
 
+    memcpy(gpuParticles, particles, particlesSize);
     err = clEnqueueWriteBuffer(cmd_queue, gpuParticles_dev, CL_TRUE, 0, particlesSize, gpuParticles, 0, NULL, NULL);
     CHK_ERROR(err);
-    
+
 
     cl_program program = clCreateProgramWithSource(context, 1, (const char ** ) &mykernel, NULL, & err);
     err = clBuildProgram(program, 1, device_list, NULL, NULL, NULL);
@@ -185,7 +187,6 @@ int main(int argc, char * argv) {
     CHK_ERROR(err);
 
 
-    double updateParticlesKernelStart = cpuSecond();
 
     // kernel launch
     err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem, &workgroup_size, 0, NULL, NULL);
