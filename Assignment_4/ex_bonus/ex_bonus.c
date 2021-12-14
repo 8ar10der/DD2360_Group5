@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
         TPB = atoi(argv[2]);
     }
 
-    printf("NUM_PARTICLES: %d TPB: %d \n", NUM_PARTICLES, TPB);
+    printf("NUM_PARTICLES: %d TPB: %d \n", NUM_PARTICLES, TPB); // this is the BLOCK_SIZE
 
     size_t particlesSize = NUM_PARTICLES * sizeof(Particle);
 
@@ -152,7 +152,7 @@ int main(int argc, char * argv[]) {
     int divisor = NUM_PARTICLES/TPB;
     int totalNoThreads = TPB * divisor + TPB; // is a factor of  TPB
     size_t n_workitem = totalNoThreads;
-    size_t local_work_size = TPB;
+    size_t local_work_size = TPB; // this is the BLOCK_SIZE
     size_t total_workgroup_size = (size_t) ceil( (double) totalNoThreads/TPB);
 
     cl_mem gpuParticles_dev = clCreateBuffer(context, CL_MEM_READ_WRITE, particlesSize, NULL, &err);
