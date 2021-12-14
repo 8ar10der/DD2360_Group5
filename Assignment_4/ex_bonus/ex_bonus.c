@@ -5,6 +5,7 @@
 #include <CL/cl.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <math.h> // for floor
 
 #define NUM_ITERATIONS 200
 #define min(a,b) \
@@ -124,21 +125,21 @@ int main(int argc, char * argv[]) {
     CHK_ERROR(err);
 
     
-    int NUM_PARTICLES, TBP;
+    int NUM_PARTICLES, TPB;
     // printf("count: %d \n", argc);
     if (argc == 1) {
         NUM_PARTICLES = 1000000;
-        TBP = 32;
+        TPB = 32;
     } 
     else {
-        printf("hi");
+        printf("using stdin\n");
         // Number of Particles
         NUM_PARTICLES = atoi(argv[1]);
         // Number of threads per block
-        TBP = atoi(argv[2]);
+        TPB = atoi(argv[2]);
     }
 
-    printf("NUM_PARTICLES: %d TBP: %d \n", NUM_PARTICLES, TBP);
+    printf("NUM_PARTICLES: %d TPB: %d \n", NUM_PARTICLES, TPB);
 
     size_t particlesSize = NUM_PARTICLES * sizeof(Particle);
 
@@ -148,14 +149,11 @@ int main(int argc, char * argv[]) {
 
     Particle * gpuParticles = (Particle * ) malloc(particlesSize);
 
-
-    int divisor = NUM_PARTICLES/TBP;
-    int totalNoThreads = TBP * divisor + TBP;
+    int divisor = NUM_PARTICLES/TPB;
+    int totalNoThreads = TPB * divisor + TPB; // is a factor of  TPB
     size_t n_workitem = totalNoThreads;
-    size_t workgroup_size = totalNoThreads/TBP;
-
-    // printf("CL_DEVICE_MAX_WORK_GROUP_SIZE: %d\n", CL_DEVICE_MAX_WORK_GROUP_SIZE);
-    printf("n_workitem: %ld ; workgroup_size: %ld ;\n", n_workitem, workgroup_size);
+    size_t local_work_size = TPB;
+    size_t total_workgroup_size = (size_t) ceil( (double) totalNoThreads/TPB);
 
     cl_mem gpuParticles_dev = clCreateBuffer(context, CL_MEM_READ_WRITE, particlesSize, NULL, &err);
     CHK_ERROR(err);
@@ -189,7 +187,7 @@ int main(int argc, char * argv[]) {
 
 
     // kernel launch
-    err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem, &workgroup_size, 0, NULL, NULL);
+    err = clEnqueueNDRangeKernel(cmd_queue, kernel, 1, NULL, &n_workitem, &local_work_size, 0, NULL, NULL);
     CHK_ERROR(err);
     err = clEnqueueReadBuffer(cmd_queue, gpuParticles_dev, CL_TRUE, 0, particlesSize, gpuParticles, 0, NULL, NULL);
 
