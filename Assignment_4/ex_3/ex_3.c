@@ -2,12 +2,12 @@
 #include<stdlib.h>
 #include <sys/time.h>
 
-void acc_saxpy(int n, float a, float *x, float *y, float *z) {
-    #pragma acc data copyin(x[0:n]) copyin(y[0:n]) copyout(z[0:n])
+void acc_saxpy(int n, float a, float *x, float *restrict y) {
+    #pragma acc data copyin(x[:n]) copy(y[:n])
     {
         #pragma acc parallel loop 
         for (int i = 0; i < n; ++i) {
-            z[i] = a * x[i] + y[i];
+            y[i] = a * x[i] + y[i];
         }
     }
 }
@@ -27,38 +27,39 @@ double cpuSecond() {
 int main(int argc, char const *argv[])
 {   
     int N = atoi(argv[1]);
-    float *x,*c_y,*g_y,*g_z;
+    float *x,*c_y,*g_y;
     //localhost pointer
     x = (float*)malloc(N*sizeof(float));
     c_y = (float*)malloc(N*sizeof(float));
-    g_y = (float*)malloc(N*sizeof(float));
-    g_z = (float*)malloc(N*sizeof(float));
+    g_y = (float*)malloc(N*sizeof(float));   
     //init array
     for (int i = 0; i < N; i++){
-        x[i] = 1.0f;
+        x[i] = 2.0f;
         c_y[i] = 1.0f;
         g_y[i] = 1.0f;
     }
 
-    const float a = 2.0F;
+    const float a = 3.0F;
 
     //saxpy
+    printf("Computing SAXPY on the GPU…  ");
+    double GPUTime = cpuSecond();
+    acc_saxpy(N,a,x,g_y);
+    GPUTime = cpuSecond() - GPUTime;
+    printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
+
     printf("Computing SAXPY on the CPU…  ");
     double CPUTime = cpuSecond();
     cpu_saxpy(N,a,x,c_y);
     CPUTime = cpuSecond() - CPUTime;
     printf("Done! The time of the cpu computing is: %fs\n", CPUTime);
-    printf("Computing SAXPY on the GPU…  ");
-    double GPUTime = cpuSecond();
-    acc_saxpy(N,a,x,g_y,g_z);
-    GPUTime = cpuSecond() - GPUTime;
-    printf("Done! The time of the gpu computing is: %fs\n", GPUTime);
+
     //comparing
     int errorCount = 0;
-    printf("Comparing the output for each implementation…  ");
+    printf("Checking Consistency...");
     for (int i = 0; i < N; i++){
         // printf("<%f,%f>",c_y[i],g_y[i]);
-        if (abs(c_y[i]-g_z[i]) >= 0.5f)
+        if (abs(c_y[i]-g_y[i]) >= 0.1f)
             errorCount++;
     }
     if (errorCount == 0){
@@ -71,4 +72,6 @@ int main(int argc, char const *argv[])
     free(g_y);
     free(c_y);
     free(x);
+
+    return 0;
 }
